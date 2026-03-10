@@ -58,7 +58,7 @@ export class PbhhBot extends Bot<Context, Config>
     }
     const me = await this.internal.me(token);
     this.user.name = me.nickname || me.username;
-    const avatarUrl = await resolveAvatarUrl(me.avatar);
+    const avatarUrl = await resolveAvatarUrl(me.avatar, this.config.baseUrl);
     this.user.avatar = avatarUrl;
     await super.start();
     this.online();
@@ -84,7 +84,7 @@ export class PbhhBot extends Bot<Context, Config>
     return {
       id: u.username,
       name: u.nickname || u.username,
-      avatar: await resolveAvatarUrl(u.avatar),
+      avatar: await resolveAvatarUrl(u.avatar, this.config.baseUrl),
     };
   }
   async sendMessage(channelId: string, content: Fragment, guildId?: string, options?: SendOptions): Promise<string[]>
