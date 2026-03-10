@@ -77,7 +77,6 @@ function authHeaders(token: string): HeadersInit
 export class PbhhInternal
 {
   constructor(private http: FetchClient, private logger: PbhhLogger) { }
-
   async login(username: string, password: string): Promise<string>
   {
     const res = await this.http.fetchJson<LoginResponse>('/api/login', {
@@ -118,7 +117,6 @@ export class PbhhInternal
       headers: authHeaders(token),
     });
   }
-
   async listPosts(token: string, username?: string): Promise<Post[]>
   {
     const qs = username ? `?username=${encodeURIComponent(username)}` : '';
@@ -141,7 +139,6 @@ export class PbhhInternal
       headers: authHeaders(token),
     });
   }
-
   async createPost(token: string, payload: { title?: string; content: string; }): Promise<void>
   {
     await this.http.fetchJson<{}>('/api/posts', {
@@ -150,7 +147,13 @@ export class PbhhInternal
       body: JSON.stringify(payload),
     });
   }
-
+  async deletePost(token: string, postId: number): Promise<void>
+  {
+    await this.http.fetchJson<{}>(`/api/posts/${postId}`, {
+      method: 'DELETE',
+      headers: { authorization: `Bearer ${token}` },
+    });
+  }
   async reply(token: string, replyToId: number, content: string): Promise<number>
   {
     await this.http.fetchRaw(`/api/posts/${replyToId}/reply`, {
@@ -158,7 +161,6 @@ export class PbhhInternal
       headers: authHeaders(token),
       body: JSON.stringify({ content }),
     });
-
     let rootId = replyToId;
     try
     {
