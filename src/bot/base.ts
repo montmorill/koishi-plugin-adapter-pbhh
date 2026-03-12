@@ -2,10 +2,11 @@ import { Config } from '../config';
 import { FetchClient } from './http';
 import { PbhhBotWithSse } from './sse';
 import { PbhhLogger } from '../utils/logger';
-import { PbhhInternal } from './api/internal';
+import { PbhhInternal, type Room } from './api/internal';
 import { TokenStore } from '../utils/session';
 import { renderMessage } from '../message/render';
 import { resolveAvatarUrl } from '../utils/avatar';
+import { RoomWsManager, type RoomWsMessage, type RoomWsEvent } from './rooms';
 import type { SendOptions } from '@satorijs/protocol';
 import { Bot, Context, Universal, Fragment } from 'koishi';
 export class PbhhBot extends Bot<Context, Config>
@@ -14,6 +15,7 @@ export class PbhhBot extends Bot<Context, Config>
   public readonly platform = 'pbhh';
   private tokenValue: string | null = null;
   public readonly internal: PbhhInternal;
+  protected readonly roomManager: RoomWsManager;
   constructor(
     ctx: Context,
     config: Config,
@@ -31,6 +33,15 @@ export class PbhhBot extends Bot<Context, Config>
       name: selfId,
       avatar: '',
     };
+    this.roomManager = new RoomWsManager(
+      ctx,
+      config.baseUrl,
+      log,
+      (roomId, msg) => this.dispatchRoomMessage(roomId, msg),
+      (roomId, event) => this.dispatchRoomEvent(roomId, event),
+      config.username,
+      config.debug,
+    );
   }
   protected get token(): string
   {
@@ -41,7 +52,6 @@ export class PbhhBot extends Bot<Context, Config>
   }
   async start(): Promise<void>
   {
-
     const token = await this.internal.login(this.config.username, this.config.password);
     this.tokenValue = token;
     this.tokenStore.set(this.selfId, token);
@@ -65,6 +75,7 @@ export class PbhhBot extends Bot<Context, Config>
   }
   async stop(): Promise<void>
   {
+    this.roomManager.disposeAll();
     this.tokenValue = null;
     if (this instanceof PbhhBotWithSse)
     {
@@ -102,7 +113,110 @@ export class PbhhBot extends Bot<Context, Config>
       const newId = await this.internal.reply(this.token, id, text);
       return newId ? [String(newId)] : [];
     }
+    if (channelId.startsWith('room:'))
+    {
+      const roomId = Number(channelId.slice('room:'.length));
+      if (!Number.isFinite(roomId)) throw new Error(`非法 room channelId: ${channelId}`);
+      return this.roomManager.sendMessage(roomId, this.token, text);
+    }
     await this.internal.createPost(this.token, { content: text });
     return [];
+  }
+  joinRoom(roomId: number): void
+  {
+    this.roomManager.joinRoom(roomId, this.token);
+  }
+  leaveRoom(roomId: number): void
+  {
+    this.roomManager.leaveRoom(roomId);
+  }
+  async sendRoomMessage(roomId: number, content: string): Promise<string[]>
+  {
+    return this.roomManager.sendMessage(roomId, this.token, content);
+  }
+
+  async createRoom(name: string): Promise<Room>
+  {
+    const room = await this.internal.createRoom(this.token, name);
+    const guildId = `room:${room.id}`;
+    const channelId = `room:${room.id}`;
+
+    this.dispatch(this.session({
+      type: 'guild-added',
+      guild: { id: guildId, name: room.name },
+    }));
+
+    this.dispatch(this.session({
+      type: 'channel-added',
+      guild: { id: guildId, name: room.name },
+      channel: { id: channelId, name: room.name, type: Universal.Channel.Type.TEXT },
+    }));
+    if (this.config.debug)
+    {
+      this.log.debug('createRoom: 已创建并下发事件 roomId=%d name=%s', room.id, room.name);
+    }
+    return room;
+  }
+
+  private async dispatchRoomMessage(roomId: number, msg: RoomWsMessage): Promise<void>
+  {
+    const channelId = `room:${roomId}`;
+    const guildId = `room:${roomId}`;
+    const avatar = await resolveAvatarUrl(msg.avatar, this.config.baseUrl);
+    const session = this.session({
+      type: 'message',
+      timestamp: new Date(msg.createdAt).getTime(),
+      selfId: this.selfId,
+      platform: this.platform,
+      user: { id: msg.username, name: msg.nickname, avatar },
+      guild: { id: guildId },
+      channel: { id: channelId, type: Universal.Channel.Type.TEXT },
+      message: { id: String(msg.id), content: msg.content },
+    });
+    session.messageId = String(msg.id);
+    session.content = msg.content;
+    if (this.config.debug)
+    {
+      this.log.debug('RoomWs dispatch roomId=%d msgId=%d user=%s', roomId, msg.id, msg.username);
+    }
+    this.dispatch(session);
+  }
+
+  private async dispatchRoomEvent(roomId: number, event: RoomWsEvent): Promise<void>
+  {
+    const guildId = `room:${roomId}`;
+    if (event.type === 'join')
+    {
+      const avatar = await resolveAvatarUrl(event.userInfo.avatar, this.config.baseUrl);
+      const user = { id: event.username, name: event.userInfo.nickname, avatar };
+      this.dispatch(this.session({
+        type: 'guild-member-added',
+        guild: { id: guildId },
+
+        member: { user },
+        user,
+      }));
+      if (this.config.debug)
+      {
+        this.log.debug('RoomWs guild-member-added roomId=%d user=%s', roomId, event.username);
+      }
+    }
+    else if (event.type === 'leave')
+    {
+      const avatar = await resolveAvatarUrl(event.userInfo.avatar, this.config.baseUrl);
+      const user = { id: event.username, name: event.userInfo.nickname, avatar };
+      this.dispatch(this.session({
+        type: 'guild-member-removed',
+        guild: { id: guildId },
+
+        member: { user },
+        user,
+      }));
+      if (this.config.debug)
+      {
+        this.log.debug('RoomWs guild-member-removed roomId=%d user=%s', roomId, event.username);
+      }
+    }
+
   }
 }

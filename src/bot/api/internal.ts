@@ -67,6 +67,22 @@ export interface Notification
   read: boolean;
   createdAt: number;
 }
+export interface Room
+{
+  id: number;
+  name: string;
+  createdBy: string;
+  createdAt: string;
+}
+export interface RoomMessage
+{
+  id: number;
+  content: string;
+  createdAt: string;
+  username: string;
+  nickname: string;
+  avatar: string;
+}
 function authHeaders(token: string): HeadersInit
 {
   return {
@@ -199,6 +215,28 @@ export class PbhhInternal
     return this.http.fetchJson<Notification[]>('/api/notifications', {
       method: 'GET',
       headers: { authorization: `Bearer ${token}` },
+    });
+  }
+  async listRooms(token: string): Promise<Room[]>
+  {
+    return this.http.fetchJson<Room[]>('/api/rooms', {
+      method: 'GET',
+      headers: authHeaders(token),
+    });
+  }
+  async getRoomMessages(token: string, roomId: number): Promise<RoomMessage[]>
+  {
+    return this.http.fetchJson<RoomMessage[]>(`/api/rooms/${roomId}/messages`, {
+      method: 'GET',
+      headers: authHeaders(token),
+    });
+  }
+  async createRoom(token: string, name: string): Promise<Room>
+  {
+    return this.http.fetchJson<Room>('/api/rooms', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ name }),
     });
   }
 }

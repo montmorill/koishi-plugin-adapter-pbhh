@@ -1,32 +1,27 @@
 import type { Config } from '../config';
 import type { PbhhLogger } from './logger';
 import { Context, Universal } from 'koishi';
-import { PbhhBotWithSse } from '../bot/sse';
+import { PbhhBotWithUnsupported } from '../bot/api/unsupported';
 import { createFetchClient } from '../bot/http';
 import { createTokenStore, type TokenStore } from './session';
-
 const RETRY_DELAYS = [5_000, 30_000, 60_000, 300_000];
-
 export function setupBootWithRetry(ctx: Context, config: Config, log: PbhhLogger): void
 {
   const tokenStore: TokenStore = createTokenStore();
   let isDisposing = false;
   let started = false;
   const abortController = new AbortController();
-
   ctx.on('dispose', () =>
   {
     isDisposing = true;
     abortController.abort();
     tokenStore.clear();
   });
-
   ctx.on('ready', async () =>
   {
     if (isDisposing || started) return;
     started = true;
     let attempt = 0;
-
     const run = async (): Promise<void> =>
     {
       if (isDisposing) return;
@@ -34,7 +29,7 @@ export function setupBootWithRetry(ctx: Context, config: Config, log: PbhhLogger
       try
       {
         const http = await createFetchClient(ctx, config, log);
-        const bot = new PbhhBotWithSse(botCtx, config, http, tokenStore, log);
+        const bot = new PbhhBotWithUnsupported(botCtx, config, http, tokenStore, log);
         bot.dispatch(bot.session({
           type: 'login-added',
           platform: bot.platform,
@@ -70,7 +65,6 @@ export function setupBootWithRetry(ctx: Context, config: Config, log: PbhhLogger
         }, delay);
       }
     };
-
     void run();
   });
 }

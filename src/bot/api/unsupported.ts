@@ -1,4 +1,4 @@
-import { Universal } from 'koishi';
+﻿import { Universal } from 'koishi';
 import { PbhhBotWithAPI } from './api';
 export class PbhhBotWithUnsupported extends PbhhBotWithAPI
 {
@@ -25,22 +25,9 @@ export class PbhhBotWithUnsupported extends PbhhBotWithAPI
   {
     this.log.debug('PBHH 适配器不支持 handleFriendRequest 方法');
   }
-  async *getGuildIter(...args: unknown[]): AsyncIterable<Universal.Guild>
-  {
-    this.log.debug('PBHH 适配器不支持 getGuildIter 方法');
-  }
   async handleGuildRequest(...args: unknown[]): Promise<void>
   {
     this.log.debug('PBHH 适配器不支持 handleGuildRequest 方法');
-  }
-  async *getChannelIter(...args: unknown[]): AsyncIterable<Universal.Channel>
-  {
-    this.log.debug('PBHH 适配器不支持 getChannelIter 方法');
-  }
-  async getChannel(...args: unknown[]): Promise<never>
-  {
-    this.log.debug('PBHH 适配器不支持 getChannel 方法');
-    throw new Error('PBHH 适配器不支持频道');
   }
   async createChannel(...args: unknown[]): Promise<never>
   {
@@ -54,15 +41,6 @@ export class PbhhBotWithUnsupported extends PbhhBotWithAPI
   async deleteChannel(...args: unknown[]): Promise<void>
   {
     this.log.debug('PBHH 适配器不支持 deleteChannel 方法');
-  }
-  async getGuildMemberList(...args: unknown[]): Promise<Universal.List<Universal.GuildMember>>
-  {
-    this.log.debug('PBHH 适配器不支持 getGuildMemberList 方法');
-    return { data: [] };
-  }
-  async *getGuildMemberIter(...args: unknown[]): AsyncIterable<Universal.GuildMember>
-  {
-    this.log.debug('PBHH 适配器不支持 getGuildMemberIter 方法');
   }
   async kickGuildMember(...args: unknown[]): Promise<void>
   {
@@ -118,7 +96,7 @@ export class PbhhBotWithUnsupported extends PbhhBotWithAPI
   {
     this.log.debug('PBHH 适配器不支持 clearReaction 方法');
   }
-  async *getReactionIter(channelId: string, messageId: string, emojiId: string): AsyncIterable<Universal.User>
+  async *getReactionIter(...args: unknown[]): AsyncIterable<Universal.User>
   {
     this.log.debug('PBHH 适配器不支持 getReactionIter 方法');
   }
@@ -126,14 +104,5 @@ export class PbhhBotWithUnsupported extends PbhhBotWithAPI
   {
     this.log.debug('PBHH 适配器不支持 broadcast 方法');
     return [];
-  }
-  async getMessageList(...args: unknown[]): Promise<Universal.List<Universal.Message>>
-  {
-    this.log.debug('PBHH 适配器不支持 getMessageList 方法');
-    return { data: [] };
-  }
-  async *getMessageIter(...args: unknown[]): AsyncIterable<Universal.Message>
-  {
-    this.log.debug('PBHH 适配器不支持 getMessageIter 方法');
   }
 }
