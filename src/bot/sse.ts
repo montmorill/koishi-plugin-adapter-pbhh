@@ -1,6 +1,6 @@
+import { PbhhBot } from './base';
 import { Context, Universal } from 'koishi';
 import type { Message } from '@satorijs/protocol';
-import { PbhhBot } from './base';
 export interface SseEvent
 {
   topic: string;

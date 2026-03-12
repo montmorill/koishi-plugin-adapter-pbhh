@@ -1,7 +1,7 @@
-import { Context, sleep } from 'koishi';
-import { ProxyAgent } from 'undici';
-import { PbhhLogger } from '../utils/logger';
 import { Config } from '../config';
+import { ProxyAgent } from 'undici';
+import { Context, sleep } from 'koishi';
+import { PbhhLogger } from '../utils/logger';
 export interface FetchClient
 {
   fetchJson<T>(path: string, init?: RequestInit): Promise<T>;

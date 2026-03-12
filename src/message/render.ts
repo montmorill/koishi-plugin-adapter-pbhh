@@ -1,7 +1,7 @@
 import { h } from 'koishi';
-import type { Fragment } from 'koishi';
 import { } from '@koishijs/assets';
 import { PbhhBot } from '../bot/base';
+import type { Fragment } from 'koishi';
 import { decodeMarkdown } from './markdown';
 export async function renderMessage(bot: PbhhBot, content: Fragment, channelId?: string): Promise<string>
 {

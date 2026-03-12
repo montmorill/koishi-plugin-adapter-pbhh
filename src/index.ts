@@ -1,5 +1,5 @@
-import { Context, Logger, Universal } from 'koishi';
 import { Config } from './config';
+import { Context, Logger, } from 'koishi';
 import { createLogger } from './utils/logger';
 import { setupBootWithRetry } from './utils/boot';
 export const name = 'adapter-pbhh';
