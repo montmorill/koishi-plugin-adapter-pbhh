@@ -1,5 +1,10 @@
 export function parseGuildId(guildId: string): number | null
 {
+  if (guildId.startsWith('post:'))
+  {
+    const id = Number(guildId.slice('post:'.length));
+    return Number.isFinite(id) ? id : null;
+  }
   const id = Number(guildId);
   return Number.isFinite(id) ? id : null;
 }

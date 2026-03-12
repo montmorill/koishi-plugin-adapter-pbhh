@@ -14,7 +14,7 @@ export class PbhhBotWithAPI extends PbhhBot
     const posts = await this.internal.listPosts(this.getToken());
     return {
       data: posts.map((p) => ({
-        id: String(p.id),
+        id: `post:${p.id}`,
         name: p.title ? p.title : `post#${p.id}`,
         avatar: '',
       })),
