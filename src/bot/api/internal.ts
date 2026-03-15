@@ -155,9 +155,9 @@ export class PbhhInternal
       headers: authHeaders(token),
     });
   }
-  async createPost(token: string, payload: { title?: string; content: string; }): Promise<void>
+  async createPost(token: string, payload: { title?: string; content: string; }): Promise<Post>
   {
-    await this.http.fetchJson<{}>('/api/posts', {
+    return this.http.fetchJson<Post>('/api/posts', {
       method: 'POST',
       headers: authHeaders(token),
       body: JSON.stringify(payload),

@@ -40,6 +40,13 @@ export interface RoomWsLeaveEvent
 export type RoomWsEvent = RoomWsRosterEvent | RoomWsJoinEvent | RoomWsLeaveEvent;
 export type OnRoomMessage = (roomId: number, msg: RoomWsMessage) => Promise<void>;
 export type OnRoomEvent = (roomId: number, event: RoomWsEvent) => Promise<void>;
+interface PendingEntry
+{
+  content: string;
+  resolve: (id: string) => void;
+  reject: (err: Error) => void;
+  cancelTimeout: () => void;
+}
 interface RoomConnection
 {
   ws: InstanceType<typeof WebSocket>;
@@ -57,8 +64,8 @@ function toWsUrl(baseUrl: string, path: string): string
 export class RoomWsManager
 {
   private connections = new Map<number, RoomConnection>();
-
   private userCache = new Map<number, Map<string, RoomUserInfo>>();
+  private pendingMessages = new Map<number, PendingEntry[]>();
   constructor(
     private ctx: Context,
     private baseUrl: string,
@@ -96,14 +103,34 @@ export class RoomWsManager
     const conn = this.connections.get(roomId);
     if (conn && conn.ws.readyState === 1)
     {
-      conn.ws.send(JSON.stringify({ type: 'message', content }));
-      return [];
+      return new Promise<string[]>((resolve, reject) =>
+      {
+        let queue = this.pendingMessages.get(roomId);
+        if (!queue) { queue = []; this.pendingMessages.set(roomId, queue); }
+        const cancelTimeout = this.ctx.setTimeout(() =>
+        {
+          const q = this.pendingMessages.get(roomId);
+          if (q) { const idx = q.findIndex(p => p.content === content); if (idx >= 0) q.splice(idx, 1); }
+          reject(new Error(`RoomWs: 发送消息后等待服务端回显超时 roomId=${roomId}`));
+        }, 5_000);
+        queue.push({ content, resolve: (id) => resolve([id]), reject, cancelTimeout });
+        conn.ws.send(JSON.stringify({ type: 'message', content }));
+      });
     }
-    await this._sendTemp(roomId, token, content);
-    return [];
+    const id = await this._sendTemp(roomId, token, content);
+    return [id];
   }
   disposeAll(): void
   {
+    for (const queue of this.pendingMessages.values())
+    {
+      for (const entry of queue)
+      {
+        entry.cancelTimeout();
+        entry.reject(new Error('RoomWs: 插件销毁，消息发送已取消'));
+      }
+    }
+    this.pendingMessages.clear();
     for (const conn of this.connections.values())
     {
       this._closeConn(conn);
@@ -200,7 +227,29 @@ export class RoomWsManager
       if (type === 'message')
       {
         const username = String(parsed.username || '');
-        if (username === this.selfUsername) return;
+        if (username === this.selfUsername)
+        {
+          const echoId = String(parsed.id || '');
+          const echoContent = String(parsed.content || '');
+          const queue = this.pendingMessages.get(roomId);
+          if (queue)
+          {
+            const idx = queue.findIndex(p => p.content === echoContent);
+            if (idx >= 0)
+            {
+              const [entry] = queue.splice(idx, 1);
+              entry.cancelTimeout();
+              if (echoId)
+              {
+                entry.resolve(echoId);
+              } else
+              {
+                entry.reject(new Error(`RoomWs: 服务端回显缺少消息 ID roomId=${roomId}`));
+              }
+            }
+          }
+          return;
+        }
         const msg: RoomWsMessage = {
           type: 'message',
           id: Number(parsed.id),
@@ -238,43 +287,62 @@ export class RoomWsManager
       this.log.warn('RoomWs: 连接错误 roomId=%d', roomId);
     };
   }
-  private _sendTemp(roomId: number, token: string, content: string): Promise<void>
+  private _sendTemp(roomId: number, token: string, content: string): Promise<string>
   {
-    return new Promise<void>((resolve) =>
+    return new Promise<string>((resolve, reject) =>
     {
       const url = toWsUrl(this.baseUrl, `/api/rooms/ws/${roomId}?token=${encodeURIComponent(token)}`);
       const ws = new WebSocket(url);
       let done = false;
-      const finish = () =>
+      const finish = (result: string | Error) =>
       {
         if (!done)
         {
           done = true;
           if (ws.readyState === 0 || ws.readyState === 1) ws.close();
-          resolve();
+          if (result instanceof Error) reject(result);
+          else resolve(result);
         }
       };
-      const disposeTimeout = this.ctx.setTimeout(finish, 5_000);
+      const disposeTimeout = this.ctx.setTimeout(
+        () =>
+        {
+          this.log.warn('RoomWs: 临时连接回显超时 roomId=%d', roomId);
+          finish(new Error(`RoomWs: 发送消息后等待服务端回显超时 roomId=${roomId}`));
+        },
+        5_000,
+      );
       ws.onopen = () =>
       {
         ws.send(JSON.stringify({ type: 'message', content }));
-        this.ctx.setTimeout(() =>
-        {
-          disposeTimeout();
-          finish();
-        }, 1_500);
       };
       ws.onerror = () =>
       {
         disposeTimeout();
-        finish();
+        finish(new Error(`RoomWs: 临时连接发生错误 roomId=${roomId}`));
       };
       ws.onmessage = (event) =>
       {
         try
         {
-          const msg = JSON.parse(String((event as { data: unknown; }).data)) as { type: string; };
-          if (msg.type === 'ping') ws.send(JSON.stringify({ type: 'pong' }));
+          const raw = JSON.parse(String((event as { data: unknown; }).data)) as Record<string, unknown>;
+          if (raw.type === 'ping') { ws.send(JSON.stringify({ type: 'pong' })); return; }
+          if (
+            raw.type === 'message' &&
+            String(raw.username || '') === this.selfUsername &&
+            String(raw.content || '') === content
+          )
+          {
+            const echoId = String(raw.id || '');
+            disposeTimeout();
+            if (echoId)
+            {
+              finish(echoId);
+            } else
+            {
+              finish(new Error(`RoomWs: 服务端回显缺少消息 ID roomId=${roomId}`));
+            }
+          }
         } catch
         {
         }

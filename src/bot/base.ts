@@ -133,15 +133,16 @@ export class PbhhBot extends Bot<Context, Config>
     const text = await renderMessage(this, content, channelId);
     if (channelId === 'posts')
     {
-      await this.internal.createPost(this.token, { content: text });
-      return [];
+      const post = await this.internal.createPost(this.token, { content: text });
+      const id = post?.id ? String(post.id) : `post-${Date.now()}`;
+      return [id];
     }
     if (channelId.startsWith('post:'))
     {
       const id = Number(channelId.slice('post:'.length));
       if (!Number.isFinite(id)) throw new Error(`非法 channelId: ${channelId}`);
       const newId = await this.internal.reply(this.token, id, text);
-      return newId ? [String(newId)] : [];
+      return [newId ? String(newId) : `reply-${id}-${Date.now()}`];
     }
     if (channelId.startsWith('room:'))
     {
