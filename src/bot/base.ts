@@ -2,11 +2,13 @@ import { Config } from '../config';
 import { FetchClient } from './http';
 import { PbhhBotWithSse } from './sse';
 import { PbhhLogger } from '../utils/logger';
-import { PbhhInternal, type Room } from './api/internal';
+import { PbhhInternal, type MailDetail, type Room } from './api/internal';
 import { TokenStore } from '../utils/session';
 import { renderMessage } from '../message/render';
 import { resolveAvatarUrl } from '../utils/avatar';
 import { RoomWsManager, type RoomWsMessage, type RoomWsEvent } from './rooms';
+import { isDirectId, makeDirectId, parseDirectId } from '../utils/ids';
+import { makeMailReplySubject, makePrivateMailSubject, parseMailAddress } from '../utils/mail';
 import type { SendOptions } from '@satorijs/protocol';
 import { Bot, Context, Universal, Fragment } from 'koishi';
 export class PbhhBot extends Bot<Context, Config>
@@ -128,9 +130,25 @@ export class PbhhBot extends Bot<Context, Config>
       avatar: await resolveAvatarUrl(u.avatar, this.config.baseUrl, this.config.gravatarMirror),
     };
   }
+  async createDirectChannel(userId: string, guildId?: string): Promise<Universal.Channel>
+  {
+    const peer = parseMailAddress(userId);
+    const user = await this.getDirectUser(peer.userId || userId);
+    return {
+      id: makeDirectId(user.id),
+      name: user.name || user.id,
+      type: Universal.Channel.Type.DIRECT,
+    };
+  }
   async sendMessage(channelId: string, content: Fragment, guildId?: string, options?: SendOptions): Promise<string[]>
   {
     const text = await renderMessage(this, content, channelId);
+    if (isDirectId(channelId))
+    {
+      const userId = parseDirectId(channelId);
+      if (!userId) throw new Error(`非法 private channelId: ${channelId}`);
+      return this.sendDirectMail(userId, text, options);
+    }
     if (channelId === 'posts')
     {
       const post = await this.internal.createPost(this.token, { content: text });
@@ -152,6 +170,106 @@ export class PbhhBot extends Bot<Context, Config>
     }
     await this.internal.createPost(this.token, { content: text });
     return [];
+  }
+  protected async getDirectUser(userIdOrAddress: string): Promise<Universal.User>
+  {
+    const peer = parseMailAddress(userIdOrAddress);
+    if (!peer.userId)
+    {
+      return {
+        id: userIdOrAddress,
+        name: userIdOrAddress,
+        avatar: '',
+      };
+    }
+    if (!peer.isInternal)
+    {
+      return {
+        id: peer.userId,
+        name: peer.userId,
+        avatar: '',
+      };
+    }
+    try
+    {
+      return await this.getUser(peer.userId);
+    } catch
+    {
+      return {
+        id: peer.userId,
+        name: peer.userId,
+        avatar: '',
+      };
+    }
+  }
+  protected buildDirectMessageContent(subject: string, text: string, html = ''): string
+  {
+    /* 指令匹配只看正文，主题放到 mail 元数据里保留。 */
+    return text.trim() || html.trim();
+  }
+  protected async dispatchMailSession(mail: MailDetail, timestamp: number): Promise<void>
+  {
+    const peer = parseMailAddress(mail.fromAddress);
+    const user = await this.getDirectUser(mail.fromAddress);
+    const userId = user.id || peer.userId || peer.address || mail.fromAddress;
+    const channelId = makeDirectId(userId);
+    const content = this.buildDirectMessageContent(mail.subject, mail.text, mail.html);
+    const session = this.session({
+      type: 'message',
+      timestamp,
+      selfId: this.selfId,
+      platform: this.platform,
+      user: {
+        id: userId,
+        name: user.name || userId,
+        avatar: user.avatar || '',
+      },
+      channel: {
+        id: channelId,
+        name: user.name || userId,
+        type: Universal.Channel.Type.DIRECT,
+      },
+      message: {
+        id: `mail:${mail.id}`,
+        content,
+      },
+    });
+    (session.event as unknown as Record<string, unknown>).mail = {
+      id: mail.id,
+      subject: mail.subject,
+      fromAddress: mail.fromAddress,
+    };
+    session.messageId = `mail:${mail.id}`;
+    session.content = content;
+    if (this.config.debug)
+    {
+      this.log.debug('Mail dispatch session: %o', session.toJSON());
+    }
+    this.dispatch(session);
+  }
+  protected getDirectMailSubject(options?: SendOptions): string
+  {
+    const fallback = makePrivateMailSubject(this.selfId);
+    const event = options?.session?.event as unknown as Record<string, unknown> | undefined;
+    const mail = event?.mail;
+    if (!mail || typeof mail !== 'object') return fallback;
+    const subject = (mail as Record<string, unknown>).subject;
+    if (typeof subject !== 'string' || !subject.trim()) return fallback;
+    return makeMailReplySubject(subject);
+  }
+  protected async sendDirectMail(userIdOrAddress: string, text: string, options?: SendOptions): Promise<string[]>
+  {
+    const peer = parseMailAddress(userIdOrAddress);
+    if (!peer.address) throw new Error(`非法私聊对象: ${userIdOrAddress}`);
+    /* 如果是回信，优先沿用原邮件主题。 */
+    const subject = this.getDirectMailSubject(options);
+    await this.internal.sendMail(this.token, peer.address, subject, text);
+    const messageId = `mail:${Date.now()}`;
+    if (this.config.debug)
+    {
+      this.log.debug('sendDirectMail: to=%s subject=%s', peer.address, subject);
+    }
+    return [messageId];
   }
   joinRoom(roomId: number): void
   {

@@ -1,6 +1,7 @@
 import { Universal } from 'koishi';
 import { PbhhBotWithSse } from '../sse';
-import { makeChannelId, parseChannelId, parseGuildId, makeRoomId, parseRoomId, isRoomId } from '../../utils/ids';
+import { isDirectId, isRoomId, makeChannelId, makeDirectId, makeRoomId, parseChannelId, parseDirectId, parseGuildId, parseRoomId } from '../../utils/ids';
+import { isSameMailPeer } from '../../utils/mail';
 export class PbhhBotWithAPI extends PbhhBotWithSse
 {
   protected getToken(): string
@@ -79,6 +80,17 @@ export class PbhhBotWithAPI extends PbhhBotWithSse
   }
   async getChannel(channelId: string, guildId?: string): Promise<Universal.Channel>
   {
+    if (isDirectId(channelId))
+    {
+      const userId = parseDirectId(channelId);
+      if (userId === null) return { id: channelId, name: channelId, type: Universal.Channel.Type.DIRECT };
+      const user = await this.getDirectUser(userId);
+      return {
+        id: makeDirectId(user.id),
+        name: user.name || user.id,
+        type: Universal.Channel.Type.DIRECT,
+      };
+    }
     if (isRoomId(channelId))
     {
       const roomId = parseRoomId(channelId);
@@ -109,6 +121,37 @@ export class PbhhBotWithAPI extends PbhhBotWithSse
   }
   async getMessageList(channelId: string): Promise<Universal.List<Universal.Message>>
   {
+    if (isDirectId(channelId))
+    {
+      const userId = parseDirectId(channelId);
+      if (userId === null) throw new Error(`非法 private channelId: ${channelId}`);
+      const mails = await this.internal.getMailInbox(this.getToken());
+      const related = mails.filter((mail) => isSameMailPeer(mail.fromAddress, userId));
+      related.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      const messages: Universal.Message[] = [];
+      for (const mail of related)
+      {
+        try
+        {
+          const detail = await this.internal.getMail(this.getToken(), mail.id);
+          const user = await this.getDirectUser(detail.fromAddress);
+          messages.push({
+            id: `mail:${detail.id}`,
+            content: this.buildDirectMessageContent(detail.subject, detail.text, detail.html),
+            channel: { id: channelId, type: Universal.Channel.Type.DIRECT },
+            user,
+            timestamp: new Date(detail.createdAt).getTime(),
+          });
+        } catch (err)
+        {
+          if (this.config.debug)
+          {
+            this.log.debug('getMessageList mail detail failed: %o', err);
+          }
+        }
+      }
+      return { data: messages };
+    }
     if (isRoomId(channelId))
     {
       const roomId = parseRoomId(channelId);

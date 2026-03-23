@@ -56,7 +56,7 @@ export interface LikeResponse
 export interface Notification
 {
   id: number;
-  type: 'reply' | 'like' | 'post';
+  type: 'reply' | 'like' | 'post' | 'mail';
   actorUsername: string;
   actorNickname: string;
   actorAvatar: string;
@@ -64,6 +64,9 @@ export interface Notification
   postContent: string;
   replyId?: number;
   replyContent?: string;
+  emailId?: number;
+  emailSubject?: string;
+  emailFromAddress?: string;
   read: boolean;
   createdAt: number;
 }
@@ -82,6 +85,25 @@ export interface RoomMessage
   username: string;
   nickname: string;
   avatar: string;
+}
+export interface MailSendResponse
+{
+  ok: boolean;
+  internalCount: number;
+  externalCount: number;
+}
+export interface MailInboxItem
+{
+  id: number;
+  fromAddress: string;
+  subject: string;
+  read: boolean;
+  createdAt: string;
+}
+export interface MailDetail extends MailInboxItem
+{
+  html: string;
+  text: string;
 }
 function authHeaders(token: string): HeadersInit
 {
@@ -237,6 +259,28 @@ export class PbhhInternal
       method: 'POST',
       headers: authHeaders(token),
       body: JSON.stringify({ name }),
+    });
+  }
+  async sendMail(token: string, recipients: string, subject: string, text: string): Promise<MailSendResponse>
+  {
+    return this.http.fetchJson<MailSendResponse>('/api/mail/send', {
+      method: 'POST',
+      headers: authHeaders(token),
+      body: JSON.stringify({ recipients, subject, text }),
+    });
+  }
+  async getMailInbox(token: string): Promise<MailInboxItem[]>
+  {
+    return this.http.fetchJson<MailInboxItem[]>('/api/mail/inbox', {
+      method: 'GET',
+      headers: authHeaders(token),
+    });
+  }
+  async getMail(token: string, mailId: number): Promise<MailDetail>
+  {
+    return this.http.fetchJson<MailDetail>(`/api/mail/${mailId}`, {
+      method: 'GET',
+      headers: authHeaders(token),
     });
   }
 }

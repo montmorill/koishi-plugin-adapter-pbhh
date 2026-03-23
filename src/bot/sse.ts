@@ -175,9 +175,31 @@ export class PbhhBotWithSse extends PbhhBot
       }
       return;
     }
+    if (evt.topic === 'notify.mail.received')
+    {
+      await this.handleNotifyMailReceived(evt);
+      return;
+    }
     if (this.config.debug)
     {
       this.log.debug('SSE topic=%s', evt.topic);
+    }
+  }
+  private async handleNotifyMailReceived(evt: SseEvent)
+  {
+    const payload = evt.payload as Record<string, unknown>;
+    const recipientUsername = String(payload.recipientUsername || '');
+    const emailId = Number(payload.emailId);
+    const timestamp = Number(evt.timestamp || Date.now());
+    if (recipientUsername && recipientUsername !== this.selfId) return;
+    if (!Number.isFinite(emailId)) return;
+    try
+    {
+      const mail = await this.internal.getMail(this.token, emailId);
+      await this.dispatchMailSession(mail, timestamp);
+    } catch (err)
+    {
+      this.log.warn('处理邮件事件失败：%o', err);
     }
   }
   private async handleNotifyPostReplied(evt: SseEvent)
