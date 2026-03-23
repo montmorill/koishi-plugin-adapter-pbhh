@@ -60,6 +60,7 @@ export class PbhhBotWithSse extends PbhhBot
           this.log.warn('SSE 连接失败：HTTP %s', res.status);
           throw new Error(`SSE HTTP ${res.status}`);
         }
+        this.roomManager.restoreRooms(this.token);
         const reader = res.body.getReader();
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
