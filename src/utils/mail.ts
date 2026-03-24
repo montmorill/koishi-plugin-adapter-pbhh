@@ -11,7 +11,6 @@ export interface ParsedMailAddress
 export function extractMailAddress(input: string): string
 {
   const trimmed = input.trim();
-  /* 兼容 Name <addr@example.com> 这种地址格式。 */
   const matched = /<([^<>]+)>/.exec(trimmed);
   return (matched?.[1] || trimmed).trim();
 }
@@ -67,7 +66,6 @@ export function makeMailReplySubject(subject: string): string
 {
   const trimmed = subject.trim();
   if (!trimmed) return '私信';
-  /* 回复邮件时尽量保留原主题。 */
   return /^re:/i.test(trimmed) ? trimmed : `Re: ${trimmed}`;
 }
 

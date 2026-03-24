@@ -204,7 +204,6 @@ export class PbhhBot extends Bot<Context, Config>
   }
   protected buildDirectMessageContent(subject: string, text: string, html = ''): string
   {
-    /* 指令匹配只看正文，主题放到 mail 元数据里保留。 */
     return text.trim() || html.trim();
   }
   protected async dispatchMailSession(mail: MailDetail, timestamp: number): Promise<void>
@@ -261,7 +260,6 @@ export class PbhhBot extends Bot<Context, Config>
   {
     const peer = parseMailAddress(userIdOrAddress);
     if (!peer.address) throw new Error(`非法私聊对象: ${userIdOrAddress}`);
-    /* 如果是回信，优先沿用原邮件主题。 */
     const subject = this.getDirectMailSubject(options);
     await this.internal.sendMail(this.token, peer.address, subject, text);
     const messageId = `mail:${Date.now()}`;

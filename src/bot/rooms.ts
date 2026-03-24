@@ -75,8 +75,8 @@ function toWsUrl(baseUrl: string, path: string): string
 export class RoomWsManager
 {
   private connections = new Map<number, RoomConnection>();
-  private desiredRooms = new Map<number, string>(); /* 记录目标入房状态 */
-  private reconnectTimers = new Map<number, () => void>(); /* 避免同一房间重复重连 */
+  private desiredRooms = new Map<number, string>();
+  private reconnectTimers = new Map<number, () => void>();
   private userCache = new Map<number, Map<string, RoomUserInfo>>();
   private pendingMessages = new Map<number, PendingEntry[]>();
 
