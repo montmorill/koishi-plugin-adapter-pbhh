@@ -9,6 +9,7 @@ import { resolveAvatarUrl } from '../utils/avatar';
 import { RoomWsManager, type RoomWsMessage, type RoomWsEvent } from './rooms';
 import { isDirectId, makeDirectId, parseDirectId } from '../utils/ids';
 import { makeMailReplySubject, makePrivateMailSubject, parseMailAddress } from '../utils/mail';
+import { resolveReplyTargetId } from '../utils/reply';
 import type { SendOptions } from '@satorijs/protocol';
 import { Bot, Context, Universal, Fragment } from 'koishi';
 export class PbhhBot extends Bot<Context, Config>
@@ -142,6 +143,9 @@ export class PbhhBot extends Bot<Context, Config>
   }
   async sendMessage(channelId: string, content: Fragment, guildId?: string, options?: SendOptions): Promise<string[]>
   {
+    const postReplyTargetId = channelId.startsWith('post:')
+      ? resolveReplyTargetId(content, Number(channelId.slice('post:'.length)), options)
+      : null;
     const text = await renderMessage(this, content, channelId);
     if (isDirectId(channelId))
     {
@@ -157,10 +161,10 @@ export class PbhhBot extends Bot<Context, Config>
     }
     if (channelId.startsWith('post:'))
     {
-      const id = Number(channelId.slice('post:'.length));
-      if (!Number.isFinite(id)) throw new Error(`非法 channelId: ${channelId}`);
-      const newId = await this.internal.reply(this.token, id, text);
-      return [newId ? String(newId) : `reply-${id}-${Date.now()}`];
+      if (postReplyTargetId === null) throw new Error(`非法 channelId: ${channelId}`);
+      const targetId = postReplyTargetId;
+      const newId = await this.internal.reply(this.token, targetId, text);
+      return [newId ? String(newId) : `reply-${targetId}-${Date.now()}`];
     }
     if (channelId.startsWith('room:'))
     {
