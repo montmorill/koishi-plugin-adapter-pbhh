@@ -11,8 +11,7 @@ export const inject = {
 };
 export const logger = new Logger('adapter-pbhh');
 export * from './config';
-export function apply(ctx: Context, config: Config)
-{
+export function apply(ctx: Context, config: Config) {
   const log = createLogger(logger, config.debug);
   setupBootWithRetry(ctx, config, log);
 }

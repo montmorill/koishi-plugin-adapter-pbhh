@@ -3,8 +3,7 @@ import type { Context } from 'koishi';
 import type { PbhhLogger } from '../utils/logger';
 import type { RoomReplyPreview } from '../message/room';
 
-export interface RoomWsMessage
-{
+export interface RoomWsMessage {
   type: 'message';
   id: number;
   username: string;
@@ -15,29 +14,25 @@ export interface RoomWsMessage
   replyTo: RoomReplyPreview | null;
 }
 
-export interface RoomUserInfo
-{
+export interface RoomUserInfo {
   username: string;
   nickname: string;
   avatar: string;
 }
 
-export interface RoomWsRosterEvent
-{
+export interface RoomWsRosterEvent {
   type: 'roster';
   users: RoomUserInfo[];
   observers: number;
 }
 
-export interface RoomWsJoinEvent
-{
+export interface RoomWsJoinEvent {
   type: 'join';
   username: string;
   userInfo: RoomUserInfo;
 }
 
-export interface RoomWsLeaveEvent
-{
+export interface RoomWsLeaveEvent {
   type: 'leave';
   username: string;
   userInfo: RoomUserInfo;
@@ -47,16 +42,14 @@ export type RoomWsEvent = RoomWsRosterEvent | RoomWsJoinEvent | RoomWsLeaveEvent
 export type OnRoomMessage = (roomId: number, msg: RoomWsMessage) => Promise<void>;
 export type OnRoomEvent = (roomId: number, event: RoomWsEvent) => Promise<void>;
 
-interface PendingEntry
-{
+interface PendingEntry {
   content: string;
   resolve: (id: string) => void;
   reject: (err: Error) => void;
   cancelTimeout: () => void;
 }
 
-interface RoomConnection
-{
+interface RoomConnection {
   ws: InstanceType<typeof WebSocket>;
   roomId: number;
   token: string;
@@ -67,15 +60,13 @@ interface RoomConnection
 const WS_CONNECTING = 0;
 const WS_OPEN = 1;
 
-function toWsUrl(baseUrl: string, path: string): string
-{
+function toWsUrl(baseUrl: string, path: string): string {
   const wsBase = baseUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
   const base = wsBase.endsWith('/') ? wsBase.slice(0, -1) : wsBase;
   return `${base}${path}`;
 }
 
-export class RoomWsManager
-{
+export class RoomWsManager {
   private connections = new Map<number, RoomConnection>();
   private desiredRooms = new Map<number, string>();
   private reconnectTimers = new Map<number, () => void>();
@@ -92,21 +83,17 @@ export class RoomWsManager
     private debug: boolean,
   ) { }
 
-  isJoined(roomId: number): boolean
-  {
+  isJoined(roomId: number): boolean {
     const conn = this.connections.get(roomId);
     return !!conn && conn.ws.readyState === WS_OPEN;
   }
 
-  joinRoom(roomId: number, token: string): void
-  {
+  joinRoom(roomId: number, token: string): void {
     this.desiredRooms.set(roomId, token);
     const conn = this.connections.get(roomId);
-    if (conn)
-    {
+    if (conn) {
       conn.token = token;
-      if (conn.ws.readyState === WS_OPEN || conn.ws.readyState === WS_CONNECTING)
-      {
+      if (conn.ws.readyState === WS_OPEN || conn.ws.readyState === WS_CONNECTING) {
         this.log.debug('RoomWs: 已存在活动连接 roomId=%d，跳过重复加入', roomId);
         return;
       }
@@ -118,8 +105,7 @@ export class RoomWsManager
     this._connectPersistent(roomId, token);
   }
 
-  leaveRoom(roomId: number): void
-  {
+  leaveRoom(roomId: number): void {
     this.desiredRooms.delete(roomId);
     this._clearReconnectTimer(roomId);
     const conn = this.connections.get(roomId);
@@ -130,16 +116,12 @@ export class RoomWsManager
     this.log.debug('RoomWs: 已退出聊天室 roomId=%d', roomId);
   }
 
-  restoreRooms(token: string): void
-  {
-    for (const roomId of this.desiredRooms.keys())
-    {
+  restoreRooms(token: string): void {
+    for (const roomId of this.desiredRooms.keys()) {
       const conn = this.connections.get(roomId);
-      if (conn)
-      {
+      if (conn) {
         conn.token = token;
-        if (conn.ws.readyState === WS_OPEN)
-        {
+        if (conn.ws.readyState === WS_OPEN) {
           continue;
         }
         this._closeConn(conn);
@@ -152,24 +134,18 @@ export class RoomWsManager
     }
   }
 
-  async sendMessage(roomId: number, token: string, content: string): Promise<string[]>
-  {
+  async sendMessage(roomId: number, token: string, content: string): Promise<string[]> {
     const conn = this.connections.get(roomId);
-    if (conn && conn.ws.readyState === WS_OPEN)
-    {
-      return new Promise<string[]>((resolve, reject) =>
-      {
+    if (conn && conn.ws.readyState === WS_OPEN) {
+      return new Promise<string[]>((resolve, reject) => {
         let queue = this.pendingMessages.get(roomId);
-        if (!queue)
-        {
+        if (!queue) {
           queue = [];
           this.pendingMessages.set(roomId, queue);
         }
-        const cancelTimeout = this.ctx.setTimeout(() =>
-        {
+        const cancelTimeout = this.ctx.setTimeout(() => {
           const q = this.pendingMessages.get(roomId);
-          if (q)
-          {
+          if (q) {
             const idx = q.findIndex(p => p.content === content);
             if (idx >= 0) q.splice(idx, 1);
           }
@@ -183,25 +159,20 @@ export class RoomWsManager
     return [id];
   }
 
-  disposeAll(): void
-  {
-    for (const dispose of this.reconnectTimers.values())
-    {
+  disposeAll(): void {
+    for (const dispose of this.reconnectTimers.values()) {
       dispose();
     }
     this.reconnectTimers.clear();
     this.desiredRooms.clear();
-    for (const queue of this.pendingMessages.values())
-    {
-      for (const entry of queue)
-      {
+    for (const queue of this.pendingMessages.values()) {
+      for (const entry of queue) {
         entry.cancelTimeout();
         entry.reject(new Error('RoomWs: 插件销毁，消息发送已取消'));
       }
     }
     this.pendingMessages.clear();
-    for (const conn of this.connections.values())
-    {
+    for (const conn of this.connections.values()) {
       this._closeConn(conn);
     }
     this.connections.clear();
@@ -209,57 +180,46 @@ export class RoomWsManager
     this.log.debug('RoomWs: 已清理所有连接');
   }
 
-  private _connectPersistent(roomId: number, token: string): void
-  {
+  private _connectPersistent(roomId: number, token: string): void {
     const url = toWsUrl(this.baseUrl, `/api/rooms/ws/${roomId}?token=${encodeURIComponent(token)}`);
     const ws = new WebSocket(url);
     const conn: RoomConnection = { ws, roomId, token, closing: false, stopPing: null };
     this.connections.set(roomId, conn);
 
-    ws.onopen = () =>
-    {
+    ws.onopen = () => {
       this._clearReconnectTimer(roomId);
       this.log.debug('RoomWs: 连接已建立 roomId=%d', roomId);
-      conn.stopPing = this.ctx.setInterval(() =>
-      {
-        if (ws.readyState === WS_OPEN)
-        {
+      conn.stopPing = this.ctx.setInterval(() => {
+        if (ws.readyState === WS_OPEN) {
           ws.send(JSON.stringify({ type: 'ping' }));
         }
       }, 25_000);
     };
 
-    ws.onmessage = (event) =>
-    {
+    ws.onmessage = (event) => {
       const raw = String((event as { data: unknown; }).data);
       let parsed: Record<string, unknown>;
-      try
-      {
+      try {
         parsed = JSON.parse(raw) as Record<string, unknown>;
-      } catch
-      {
+      } catch {
         return;
       }
 
       const type = String(parsed.type || '');
-      if (type === 'ping')
-      {
+      if (type === 'ping') {
         ws.send(JSON.stringify({ type: 'pong' }));
         return;
       }
       if (type === 'pong') return;
 
-      if (this.debug)
-      {
+      if (this.debug) {
         this.log.debug('RoomWs recv roomId=%d: %s', roomId, raw.slice(0, 200));
       }
 
-      if (type === 'roster')
-      {
+      if (type === 'roster') {
         const rawUsers = Array.isArray(parsed.users) ? parsed.users as Array<Record<string, unknown>> : [];
         const cache = new Map<string, RoomUserInfo>();
-        for (const u of rawUsers)
-        {
+        for (const u of rawUsers) {
           const username = String(u.username || '');
           if (!username) continue;
           cache.set(username, {
@@ -277,13 +237,11 @@ export class RoomWsManager
         return;
       }
 
-      if (type === 'join')
-      {
+      if (type === 'join') {
         const username = String(parsed.username || '');
         if (!username) return;
         let cache = this.userCache.get(roomId);
-        if (!cache)
-        {
+        if (!cache) {
           cache = new Map();
           this.userCache.set(roomId, cache);
         }
@@ -293,8 +251,7 @@ export class RoomWsManager
         return;
       }
 
-      if (type === 'leave')
-      {
+      if (type === 'leave') {
         const username = String(parsed.username || '');
         if (!username) return;
         const cache = this.userCache.get(roomId);
@@ -304,26 +261,20 @@ export class RoomWsManager
         return;
       }
 
-      if (type === 'message')
-      {
+      if (type === 'message') {
         const username = String(parsed.username || '');
-        if (username === this.selfUsername)
-        {
+        if (username === this.selfUsername) {
           const echoId = String(parsed.id || '');
           const echoContent = String(parsed.content || '');
           const queue = this.pendingMessages.get(roomId);
-          if (queue)
-          {
+          if (queue) {
             const idx = queue.findIndex(p => p.content === echoContent);
-            if (idx >= 0)
-            {
+            if (idx >= 0) {
               const [entry] = queue.splice(idx, 1);
               entry.cancelTimeout();
-              if (echoId)
-              {
+              if (echoId) {
                 entry.resolve(echoId);
-              } else
-              {
+              } else {
                 entry.reject(new Error(`RoomWs: 服务端回显缺少消息 ID roomId=${roomId}`));
               }
             }
@@ -345,20 +296,17 @@ export class RoomWsManager
       }
     };
 
-    ws.onclose = () =>
-    {
+    ws.onclose = () => {
       conn.stopPing?.();
       conn.stopPing = null;
       this.connections.delete(roomId);
       this.userCache.delete(roomId);
 
-      if (conn.closing)
-      {
+      if (conn.closing) {
         this.log.debug('RoomWs: 连接已主动关闭 roomId=%d', roomId);
         return;
       }
-      if (!this.desiredRooms.has(roomId))
-      {
+      if (!this.desiredRooms.has(roomId)) {
         this.log.debug('RoomWs: roomId=%d 已不在目标入房列表，跳过重连', roomId);
         return;
       }
@@ -367,61 +315,48 @@ export class RoomWsManager
       this._scheduleReconnect(roomId, conn.token);
     };
 
-    ws.onerror = () =>
-    {
+    ws.onerror = () => {
       this.log.warn('RoomWs: 连接错误 roomId=%d', roomId);
     };
   }
 
-  private _sendTemp(roomId: number, token: string, content: string): Promise<string>
-  {
-    return new Promise<string>((resolve, reject) =>
-    {
+  private _sendTemp(roomId: number, token: string, content: string): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
       const url = toWsUrl(this.baseUrl, `/api/rooms/ws/${roomId}?token=${encodeURIComponent(token)}`);
       const ws = new WebSocket(url);
       let done = false;
 
-      const finish = (result: string | Error) =>
-      {
+      const finish = (result: string | Error) => {
         if (done) return;
         done = true;
-        if (ws.readyState === WS_CONNECTING || ws.readyState === WS_OPEN)
-        {
+        if (ws.readyState === WS_CONNECTING || ws.readyState === WS_OPEN) {
           ws.close();
         }
-        if (result instanceof Error)
-        {
+        if (result instanceof Error) {
           reject(result);
-        } else
-        {
+        } else {
           resolve(result);
         }
       };
 
-      const disposeTimeout = this.ctx.setTimeout(() =>
-      {
+      const disposeTimeout = this.ctx.setTimeout(() => {
         this.log.warn('RoomWs: 临时连接回显超时 roomId=%d', roomId);
         finish(new Error(`RoomWs: 发送消息后等待服务端回显超时 roomId=${roomId}`));
       }, 5_000);
 
-      ws.onopen = () =>
-      {
+      ws.onopen = () => {
         ws.send(JSON.stringify({ type: 'message', content }));
       };
 
-      ws.onerror = () =>
-      {
+      ws.onerror = () => {
         disposeTimeout();
         finish(new Error(`RoomWs: 临时连接发生错误 roomId=${roomId}`));
       };
 
-      ws.onmessage = (event) =>
-      {
-        try
-        {
+      ws.onmessage = (event) => {
+        try {
           const raw = JSON.parse(String((event as { data: unknown; }).data)) as Record<string, unknown>;
-          if (raw.type === 'ping')
-          {
+          if (raw.type === 'ping') {
             ws.send(JSON.stringify({ type: 'pong' }));
             return;
           }
@@ -429,42 +364,34 @@ export class RoomWsManager
             raw.type === 'message' &&
             String(raw.username || '') === this.selfUsername &&
             String(raw.content || '') === content
-          )
-          {
+          ) {
             const echoId = String(raw.id || '');
             disposeTimeout();
-            if (echoId)
-            {
+            if (echoId) {
               finish(echoId);
-            } else
-            {
+            } else {
               finish(new Error(`RoomWs: 服务端回显缺少消息 ID roomId=${roomId}`));
             }
           }
-        } catch
-        {
+        } catch {
         }
       };
     });
   }
 
-  private _closeConn(conn: RoomConnection): void
-  {
+  private _closeConn(conn: RoomConnection): void {
     conn.closing = true;
     conn.stopPing?.();
     conn.stopPing = null;
     const state = conn.ws.readyState;
-    if (state === WS_CONNECTING || state === WS_OPEN)
-    {
+    if (state === WS_CONNECTING || state === WS_OPEN) {
       conn.ws.close();
     }
   }
 
-  private _scheduleReconnect(roomId: number, token: string): void
-  {
+  private _scheduleReconnect(roomId: number, token: string): void {
     this._clearReconnectTimer(roomId);
-    const dispose = this.ctx.setTimeout(() =>
-    {
+    const dispose = this.ctx.setTimeout(() => {
       this.reconnectTimers.delete(roomId);
       if (!this.desiredRooms.has(roomId) || this.connections.has(roomId)) return;
       this._connectPersistent(roomId, token);
@@ -472,8 +399,7 @@ export class RoomWsManager
     this.reconnectTimers.set(roomId, dispose);
   }
 
-  private _clearReconnectTimer(roomId: number): void
-  {
+  private _clearReconnectTimer(roomId: number): void {
     const dispose = this.reconnectTimers.get(roomId);
     if (!dispose) return;
     dispose();
@@ -481,8 +407,7 @@ export class RoomWsManager
   }
 }
 
-function parseReplyPreview(value: unknown): RoomReplyPreview | null
-{
+function parseReplyPreview(value: unknown): RoomReplyPreview | null {
   if (!value || typeof value !== 'object') return null;
   const replyTo = value as Record<string, unknown>;
   const id = Number(replyTo.id);

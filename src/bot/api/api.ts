@@ -4,16 +4,13 @@ import { isDirectId, isRoomId, makeChannelId, makeDirectId, makeRoomId, parseCha
 import { isSameMailPeer } from '../../utils/mail';
 import { getPostDisplayName } from '../../utils/post';
 import { adaptRoomMessageContent, createRoomQuote, type RoomEntityLookup, type RoomEntityResolver } from '../../message/room';
-export class PbhhBotWithAPI extends PbhhBotWithSse
-{
-  protected getToken(): string
-  {
+export class PbhhBotWithAPI extends PbhhBotWithSse {
+  protected getToken(): string {
     const token = this.tokenStore.get(this.selfId);
     if (!token) throw new Error('token 不存在，请检查登录流程');
     return token;
   }
-  async getGuildList(): Promise<Universal.List<Universal.Guild>>
-  {
+  async getGuildList(): Promise<Universal.List<Universal.Guild>> {
     const token = this.getToken();
     const [posts, rooms] = await Promise.all([
       this.internal.listPosts(token).catch(() => []),
@@ -34,10 +31,8 @@ export class PbhhBotWithAPI extends PbhhBotWithSse
       ],
     };
   }
-  async getChannelList(guildId: string): Promise<Universal.List<Universal.Channel>>
-  {
-    if (isRoomId(guildId))
-    {
+  async getChannelList(guildId: string): Promise<Universal.List<Universal.Channel>> {
+    if (isRoomId(guildId)) {
       const roomId = parseRoomId(guildId);
       if (roomId === null) throw new Error(`非法 room guildId: ${guildId}`);
       const rooms = await this.internal.listRooms(this.getToken());
@@ -60,10 +55,8 @@ export class PbhhBotWithAPI extends PbhhBotWithSse
       }],
     };
   }
-  async getGuild(guildId: string): Promise<Universal.Guild>
-  {
-    if (isRoomId(guildId))
-    {
+  async getGuild(guildId: string): Promise<Universal.Guild> {
+    if (isRoomId(guildId)) {
       const roomId = parseRoomId(guildId);
       if (roomId === null) return { id: guildId, name: guildId };
       const rooms = await this.internal.listRooms(this.getToken());
@@ -80,10 +73,8 @@ export class PbhhBotWithAPI extends PbhhBotWithSse
       avatar: '',
     };
   }
-  async getChannel(channelId: string, guildId?: string): Promise<Universal.Channel>
-  {
-    if (isDirectId(channelId))
-    {
+  async getChannel(channelId: string, guildId?: string): Promise<Universal.Channel> {
+    if (isDirectId(channelId)) {
       const userId = parseDirectId(channelId);
       if (userId === null) return { id: channelId, name: channelId, type: Universal.Channel.Type.DIRECT };
       const user = await this.getDirectUser(userId);
@@ -93,8 +84,7 @@ export class PbhhBotWithAPI extends PbhhBotWithSse
         type: Universal.Channel.Type.DIRECT,
       };
     }
-    if (isRoomId(channelId))
-    {
+    if (isRoomId(channelId)) {
       const roomId = parseRoomId(channelId);
       if (roomId === null) return { id: channelId, name: channelId, type: Universal.Channel.Type.TEXT };
       const rooms = await this.internal.listRooms(this.getToken());
@@ -106,8 +96,7 @@ export class PbhhBotWithAPI extends PbhhBotWithSse
       };
     }
     const postId = parseChannelId(channelId);
-    if (postId === null)
-    {
+    if (postId === null) {
       return {
         id: channelId,
         name: channelId,
@@ -121,20 +110,16 @@ export class PbhhBotWithAPI extends PbhhBotWithSse
       type: Universal.Channel.Type.TEXT,
     };
   }
-  async getMessageList(channelId: string): Promise<Universal.List<Universal.Message>>
-  {
-    if (isDirectId(channelId))
-    {
+  async getMessageList(channelId: string): Promise<Universal.List<Universal.Message>> {
+    if (isDirectId(channelId)) {
       const userId = parseDirectId(channelId);
       if (userId === null) throw new Error(`非法 private channelId: ${channelId}`);
       const mails = await this.internal.getMailInbox(this.getToken());
       const related = mails.filter((mail) => isSameMailPeer(mail.fromAddress, userId));
       related.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
       const messages: Universal.Message[] = [];
-      for (const mail of related)
-      {
-        try
-        {
+      for (const mail of related) {
+        try {
           const detail = await this.internal.getMail(this.getToken(), mail.id);
           const user = await this.getDirectUser(detail.fromAddress);
           messages.push({
@@ -144,25 +129,21 @@ export class PbhhBotWithAPI extends PbhhBotWithSse
             user,
             timestamp: new Date(detail.createdAt).getTime(),
           });
-        } catch (err)
-        {
-          if (this.config.debug)
-          {
+        } catch (err) {
+          if (this.config.debug) {
             this.log.debug('getMessageList mail detail failed: %o', err);
           }
         }
       }
       return { data: messages };
     }
-    if (isRoomId(channelId))
-    {
+    if (isRoomId(channelId)) {
       const roomId = parseRoomId(channelId);
       if (roomId === null) throw new Error(`非法 room channelId: ${channelId}`);
       const msgs = await this.internal.getRoomMessages(this.getToken(), roomId);
       const resolver = createRoomEntityResolver(this);
       const data: Universal.Message[] = [];
-      for (const m of msgs)
-      {
+      for (const m of msgs) {
         const timestamp = new Date(m.createdAt).getTime();
         data.push({
           id: String(m.id),
@@ -198,8 +179,7 @@ export class PbhhBotWithAPI extends PbhhBotWithSse
       },
       timestamp: post.createdAt,
     });
-    for (const r of thread)
-    {
+    for (const r of thread) {
       messages.push({
         id: String(r.id),
         content: r.content,
@@ -214,18 +194,14 @@ export class PbhhBotWithAPI extends PbhhBotWithSse
     }
     return { data: messages };
   }
-  async getGuildMemberList(guildId: string): Promise<Universal.List<Universal.GuildMember>>
-  {
-    if (isRoomId(guildId))
-    {
+  async getGuildMemberList(guildId: string): Promise<Universal.List<Universal.GuildMember>> {
+    if (isRoomId(guildId)) {
       const roomId = parseRoomId(guildId);
       if (roomId === null) return { data: [] };
       const msgs = await this.internal.getRoomMessages(this.getToken(), roomId);
       const users = new Map<string, Universal.User>();
-      for (const m of msgs)
-      {
-        if (!users.has(m.username))
-        {
+      for (const m of msgs) {
+        if (!users.has(m.username)) {
           users.set(m.username, {
             id: m.username,
             name: m.nickname || m.username,
@@ -246,10 +222,8 @@ export class PbhhBotWithAPI extends PbhhBotWithSse
       name: post.nickname || post.username,
       avatar: '',
     });
-    for (const r of thread)
-    {
-      if (!users.has(r.username))
-      {
+    for (const r of thread) {
+      if (!users.has(r.username)) {
         users.set(r.username, {
           id: r.username,
           name: r.nickname || r.username,
@@ -263,16 +237,13 @@ export class PbhhBotWithAPI extends PbhhBotWithSse
   }
 }
 
-function createRoomEntityResolver(lookup: RoomEntityLookup): RoomEntityResolver
-{
+function createRoomEntityResolver(lookup: RoomEntityLookup): RoomEntityResolver {
   const userCache = new Map<string, Promise<string>>();
   const channelCache = new Map<string, Promise<string>>();
   return {
-    resolveUserName(userId)
-    {
+    resolveUserName(userId) {
       let task = userCache.get(userId);
-      if (!task)
-      {
+      if (!task) {
         task = lookup.getUser(userId)
           .then((user) => user.name || userId)
           .catch(() => userId);
@@ -280,11 +251,9 @@ function createRoomEntityResolver(lookup: RoomEntityLookup): RoomEntityResolver
       }
       return task;
     },
-    resolveChannelName(channelId)
-    {
+    resolveChannelName(channelId) {
       let task = channelCache.get(channelId);
-      if (!task)
-      {
+      if (!task) {
         task = lookup.getChannel(`room:${channelId}`)
           .then((channel) => channel.name || channelId)
           .catch(() => channelId);

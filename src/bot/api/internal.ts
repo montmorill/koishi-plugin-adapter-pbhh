@@ -1,18 +1,15 @@
 import type { FetchClient } from '../http';
 import type { PbhhLogger } from '../../utils/logger';
-export interface LoginResponse
-{
+export interface LoginResponse {
   token: string;
 }
-export interface MeResponse
-{
+export interface MeResponse {
   username: string;
   nickname: string;
   avatar: string;
   capabilities: string[];
 }
-export interface UserResponse
-{
+export interface UserResponse {
   username: string;
   nickname: string;
   avatar: string;
@@ -20,8 +17,7 @@ export interface UserResponse
   followerCount: number;
   followingCount: number;
 }
-export interface Post
-{
+export interface Post {
   id: number;
   title?: string;
   content: string;
@@ -34,8 +30,7 @@ export interface Post
   liked: boolean;
   rootId?: number;
 }
-export interface ThreadReply
-{
+export interface ThreadReply {
   id: number;
   parentId: number;
   content: string;
@@ -49,12 +44,10 @@ export interface ThreadReply
   parentNickname: string;
   parentContent: string;
 }
-export interface LikeResponse
-{
+export interface LikeResponse {
   liked: boolean;
 }
-export interface Notification
-{
+export interface Notification {
   id: number;
   type: 'reply' | 'like' | 'post' | 'mail';
   actorUsername: string;
@@ -70,15 +63,13 @@ export interface Notification
   read: boolean;
   createdAt: number;
 }
-export interface Room
-{
+export interface Room {
   id: number;
   name: string;
   createdBy: string;
   createdAt: string;
 }
-export interface RoomMessage
-{
+export interface RoomMessage {
   id: number;
   content: string;
   createdAt: string;
@@ -93,37 +84,31 @@ export interface RoomMessage
     content: string;
   } | null;
 }
-export interface MailSendResponse
-{
+export interface MailSendResponse {
   ok: boolean;
   internalCount: number;
   externalCount: number;
 }
-export interface MailInboxItem
-{
+export interface MailInboxItem {
   id: number;
   fromAddress: string;
   subject: string;
   read: boolean;
   createdAt: string;
 }
-export interface MailDetail extends MailInboxItem
-{
+export interface MailDetail extends MailInboxItem {
   html: string;
   text: string;
 }
-function authHeaders(token: string): HeadersInit
-{
+function authHeaders(token: string): HeadersInit {
   return {
     authorization: `Bearer ${token}`,
     'content-type': 'application/json',
   };
 }
-export class PbhhInternal
-{
+export class PbhhInternal {
   constructor(private http: FetchClient, private logger: PbhhLogger) { }
-  async login(username: string, password: string): Promise<string>
-  {
+  async login(username: string, password: string): Promise<string> {
     const res = await this.http.fetchJson<LoginResponse>('/api/login', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -132,159 +117,136 @@ export class PbhhInternal
     if (!res?.token) throw new Error('登录失败：未返回 token');
     return res.token;
   }
-  async me(token: string): Promise<MeResponse>
-  {
+  async me(token: string): Promise<MeResponse> {
     return this.http.fetchJson<MeResponse>('/api/me', {
       method: 'GET',
       headers: authHeaders(token),
     });
   }
-  async patchMe(token: string, payload: { nickname?: string; avatar?: string; }): Promise<MeResponse>
-  {
+  async patchMe(token: string, payload: { nickname?: string; avatar?: string; }): Promise<MeResponse> {
     return this.http.fetchJson<MeResponse>('/api/me', {
       method: 'PATCH',
       headers: authHeaders(token),
       body: JSON.stringify(payload),
     });
   }
-  async setNotificationPrefs(token: string, prefs: { like: boolean; reply: boolean; post: boolean; }): Promise<{ like: boolean; reply: boolean; post: boolean; }>
-  {
+  async setNotificationPrefs(token: string, prefs: { like: boolean; reply: boolean; post: boolean; }): Promise<{ like: boolean; reply: boolean; post: boolean; }> {
     return this.http.fetchJson('/api/me/notification-prefs', {
       method: 'PATCH',
       headers: authHeaders(token),
       body: JSON.stringify(prefs),
     });
   }
-  async getUser(token: string, username: string): Promise<UserResponse>
-  {
+  async getUser(token: string, username: string): Promise<UserResponse> {
     return this.http.fetchJson<UserResponse>(`/api/users/${encodeURIComponent(username)}`, {
       method: 'GET',
       headers: authHeaders(token),
     });
   }
-  async listPosts(token: string, username?: string): Promise<Post[]>
-  {
+  async listPosts(token: string, username?: string): Promise<Post[]> {
     const qs = username ? `?username=${encodeURIComponent(username)}` : '';
     return this.http.fetchJson<Post[]>(`/api/posts${qs}`, {
       method: 'GET',
       headers: authHeaders(token),
     });
   }
-  async getPost(token: string, postId: number): Promise<Post>
-  {
+  async getPost(token: string, postId: number): Promise<Post> {
     return this.http.fetchJson<Post>(`/api/posts/${postId}`, {
       method: 'GET',
       headers: authHeaders(token),
     });
   }
-  async getThread(token: string, postId: number): Promise<ThreadReply[]>
-  {
+  async getThread(token: string, postId: number): Promise<ThreadReply[]> {
     return this.http.fetchJson<ThreadReply[]>(`/api/posts/${postId}/thread`, {
       method: 'GET',
       headers: authHeaders(token),
     });
   }
-  async createPost(token: string, payload: { title?: string; content: string; }): Promise<Post>
-  {
+  async createPost(token: string, payload: { title?: string; content: string; }): Promise<Post> {
     return this.http.fetchJson<Post>('/api/posts', {
       method: 'POST',
       headers: authHeaders(token),
       body: JSON.stringify(payload),
     });
   }
-  async deletePost(token: string, postId: number): Promise<void>
-  {
+  async deletePost(token: string, postId: number): Promise<void> {
     await this.http.fetchJson<{}>(`/api/posts/${postId}`, {
       method: 'DELETE',
       headers: { authorization: `Bearer ${token}` },
     });
   }
-  async reply(token: string, replyToId: number, content: string): Promise<number>
-  {
+  async reply(token: string, replyToId: number, content: string): Promise<number> {
     await this.http.fetchRaw(`/api/posts/${replyToId}/reply`, {
       method: 'POST',
       headers: authHeaders(token),
       body: JSON.stringify({ content }),
     });
     let rootId = replyToId;
-    try
-    {
+    try {
       const p = await this.getPost(token, replyToId);
       rootId = Number(p.rootId || p.id || replyToId);
-    } catch
-    {
+    } catch {
     }
-    try
-    {
+    try {
       const thread = await this.getThread(token, rootId);
       const self = await this.me(token);
       const selfUsername = self.username;
-      for (let i = thread.length - 1; i >= 0; i--)
-      {
+      for (let i = thread.length - 1; i >= 0; i--) {
         const r = thread[i];
         if (r.username !== selfUsername) continue;
         if (r.parentId !== replyToId) continue;
         if (r.content !== content) continue;
         return r.id;
       }
-    } catch
-    {
+    } catch {
     }
     return 0;
   }
-  async like(token: string, postId: number): Promise<LikeResponse>
-  {
+  async like(token: string, postId: number): Promise<LikeResponse> {
     return this.http.fetchJson<LikeResponse>(`/api/posts/${postId}/like`, {
       method: 'POST',
       headers: { authorization: `Bearer ${token}` },
     });
   }
-  async notifications(token: string): Promise<Notification[]>
-  {
+  async notifications(token: string): Promise<Notification[]> {
     return this.http.fetchJson<Notification[]>('/api/notifications', {
       method: 'GET',
       headers: { authorization: `Bearer ${token}` },
     });
   }
-  async listRooms(token: string): Promise<Room[]>
-  {
+  async listRooms(token: string): Promise<Room[]> {
     return this.http.fetchJson<Room[]>('/api/rooms', {
       method: 'GET',
       headers: authHeaders(token),
     });
   }
-  async getRoomMessages(token: string, roomId: number): Promise<RoomMessage[]>
-  {
+  async getRoomMessages(token: string, roomId: number): Promise<RoomMessage[]> {
     return this.http.fetchJson<RoomMessage[]>(`/api/rooms/${roomId}/messages`, {
       method: 'GET',
       headers: authHeaders(token),
     });
   }
-  async createRoom(token: string, name: string): Promise<Room>
-  {
+  async createRoom(token: string, name: string): Promise<Room> {
     return this.http.fetchJson<Room>('/api/rooms', {
       method: 'POST',
       headers: authHeaders(token),
       body: JSON.stringify({ name }),
     });
   }
-  async sendMail(token: string, recipients: string, subject: string, text: string): Promise<MailSendResponse>
-  {
+  async sendMail(token: string, recipients: string, subject: string, text: string): Promise<MailSendResponse> {
     return this.http.fetchJson<MailSendResponse>('/api/mail/send', {
       method: 'POST',
       headers: authHeaders(token),
       body: JSON.stringify({ recipients, subject, text }),
     });
   }
-  async getMailInbox(token: string): Promise<MailInboxItem[]>
-  {
+  async getMailInbox(token: string): Promise<MailInboxItem[]> {
     return this.http.fetchJson<MailInboxItem[]>('/api/mail/inbox', {
       method: 'GET',
       headers: authHeaders(token),
     });
   }
-  async getMail(token: string, mailId: number): Promise<MailDetail>
-  {
+  async getMail(token: string, mailId: number): Promise<MailDetail> {
     return this.http.fetchJson<MailDetail>(`/api/mail/${mailId}`, {
       method: 'GET',
       headers: authHeaders(token),

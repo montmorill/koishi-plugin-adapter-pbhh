@@ -1,8 +1,7 @@
 import type { Message } from '@satorijs/protocol';
 import { h, Universal } from 'koishi';
 
-export interface RoomReplyPreview
-{
+export interface RoomReplyPreview {
   id: number;
   username: string;
   nickname: string;
@@ -10,38 +9,32 @@ export interface RoomReplyPreview
   content: string;
 }
 
-export interface RoomEntityLookup
-{
+export interface RoomEntityLookup {
   getUser(userId: string): Promise<{ name?: string; }>;
   getChannel(channelId: string): Promise<{ name?: string; }>;
 }
 
-export interface RoomEntityResolver
-{
+export interface RoomEntityResolver {
   resolveUserName(userId: string): Promise<string>;
   resolveChannelName(channelId: string): Promise<string>;
 }
 
-function escapeRoomText(text: string): string
-{
+function escapeRoomText(text: string): string {
   return text
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 }
 
-export async function adaptRoomMessageContent(content: string, resolver?: RoomEntityResolver): Promise<string>
-{
+export async function adaptRoomMessageContent(content: string, resolver?: RoomEntityResolver): Promise<string> {
   let result = '';
   let textStart = 0;
   let index = 0;
 
-  while (index < content.length)
-  {
+  while (index < content.length) {
     const rest = content.slice(index);
     const mentionMatch = rest.match(/^@([a-zA-Z0-9_-]+)@/);
-    if (mentionMatch)
-    {
+    if (mentionMatch) {
       const userId = mentionMatch[1];
       result += escapeRoomText(content.slice(textStart, index));
       const userName = resolver ? await resolver.resolveUserName(userId) : userId;
@@ -52,8 +45,7 @@ export async function adaptRoomMessageContent(content: string, resolver?: RoomEn
     }
 
     const sharpMatch = rest.match(/^#(\d+)#/);
-    if (sharpMatch)
-    {
+    if (sharpMatch) {
       const channelId = sharpMatch[1];
       result += escapeRoomText(content.slice(textStart, index));
       const channelName = resolver ? await resolver.resolveChannelName(channelId) : channelId;
@@ -70,8 +62,7 @@ export async function adaptRoomMessageContent(content: string, resolver?: RoomEn
   return result;
 }
 
-export async function createRoomQuote(roomId: number, replyTo: RoomReplyPreview, timestamp: number, resolver?: RoomEntityResolver): Promise<Message>
-{
+export async function createRoomQuote(roomId: number, replyTo: RoomReplyPreview, timestamp: number, resolver?: RoomEntityResolver): Promise<Message> {
   const content = await adaptRoomMessageContent(replyTo.content, resolver);
   return {
     id: String(replyTo.id),

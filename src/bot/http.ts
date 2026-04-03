@@ -3,50 +3,42 @@ import { ProxyAgent } from 'undici';
 import { Context, sleep } from 'koishi';
 import { PbhhLogger } from '../utils/logger';
 
-export class PbhhHttpError extends Error
-{
+export class PbhhHttpError extends Error {
   constructor(
     message: string,
     public readonly status: number,
     public readonly statusText: string,
     public readonly body: string,
-  )
-  {
+  ) {
     super(message);
     this.name = 'PbhhHttpError';
   }
 }
 
-export interface FetchClient
-{
+export interface FetchClient {
   fetchJson<T>(path: string, init?: RequestInit): Promise<T>;
   fetchRaw(path: string, init?: RequestInit): Promise<Response>;
   getProxyStatus(): { enabled: boolean; reason?: string; };
 }
-function joinUrl(baseUrl: string, path: string): string
-{
+function joinUrl(baseUrl: string, path: string): string {
   const base = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
   const p = path.startsWith('/') ? path : `/${path}`;
   return `${base}${p}`;
 }
-function withTimeout(ctx: Context, init: RequestInit | undefined, timeout: number): { init: RequestInit; dispose: () => void; }
-{
+function withTimeout(ctx: Context, init: RequestInit | undefined, timeout: number): { init: RequestInit; dispose: () => void; } {
   const controller = new AbortController();
   const merged: RequestInit = {
     ...init,
     signal: controller.signal,
   };
-  
+
   let disposeTimer: (() => void) | null = null;
-  try
-  {
-    disposeTimer = ctx.setTimeout(() =>
-    {
+  try {
+    disposeTimer = ctx.setTimeout(() => {
       controller.abort();
     }, timeout);
-  } catch
-  {
-    
+  } catch {
+
     controller.abort();
   }
   return {
@@ -54,14 +46,11 @@ function withTimeout(ctx: Context, init: RequestInit | undefined, timeout: numbe
     dispose: () => disposeTimer?.(),
   };
 }
-function getRetryDelay(attempt: number): number
-{
+function getRetryDelay(attempt: number): number {
   return Math.min((attempt + 1) * 1000, 10_000);
 }
-async function probeProxy(ctx: Context, proxyUrl: string, baseUrl: string, ua: string, timeout: number): Promise<boolean>
-{
-  try
-  {
+async function probeProxy(ctx: Context, proxyUrl: string, baseUrl: string, ua: string, timeout: number): Promise<boolean> {
+  try {
     const dispatcher = new ProxyAgent(proxyUrl);
     const { init, dispose } = withTimeout(ctx, {
       method: 'GET',
@@ -74,32 +63,26 @@ async function probeProxy(ctx: Context, proxyUrl: string, baseUrl: string, ua: s
     const res = await fetch(joinUrl(baseUrl, '/api/me'), init);
     dispose();
     return res.status > 0;
-  } catch
-  {
+  } catch {
     return false;
   }
 }
-export async function createFetchClient(ctx: Context, config: Config, logger: PbhhLogger): Promise<FetchClient>
-{
+export async function createFetchClient(ctx: Context, config: Config, logger: PbhhLogger): Promise<FetchClient> {
   let proxyEnabled = false;
   let proxyReason: string | undefined;
   let dispatcher: ProxyAgent | undefined;
-  if (config.useProxy && config.proxyUrl)
-  {
+  if (config.useProxy && config.proxyUrl) {
     const ok = await probeProxy(ctx, config.proxyUrl, config.baseUrl, config.userAgent, config.requestTimeout);
-    if (ok)
-    {
+    if (ok) {
       proxyEnabled = true;
       dispatcher = new ProxyAgent(config.proxyUrl);
       logger.debug('代理探测成功，启用代理：%s', config.proxyUrl);
-    } else
-    {
+    } else {
       proxyReason = '代理不可用，已禁用';
       logger.warn('代理探测失败，禁用代理：%s', config.proxyUrl);
     }
   }
-  async function fetchRaw(path: string, init?: RequestInit): Promise<Response>
-  {
+  async function fetchRaw(path: string, init?: RequestInit): Promise<Response> {
     const url = joinUrl(config.baseUrl, path);
     const headers = new Headers(init?.headers);
     headers.set('accept', headers.get('accept') || '*/*');
@@ -109,15 +92,12 @@ export async function createFetchClient(ctx: Context, config: Config, logger: Pb
       ? ({ ...init2, dispatcher } as RequestInit)
       : init2;
     let attempt = 0;
-    while (true)
-    {
-      try
-      {
+    while (true) {
+      try {
         const res = await fetch(url, finalInit);
         disposeTimeout();
         return res;
-      } catch (err)
-      {
+      } catch (err) {
         disposeTimeout();
         if (attempt
           >= config.maxRetries - 1) throw err;
@@ -128,11 +108,9 @@ export async function createFetchClient(ctx: Context, config: Config, logger: Pb
       }
     }
   }
-  async function fetchJson<T>(path: string, init?: RequestInit): Promise<T>
-  {
+  async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
     const res = await fetchRaw(path, init);
-    if (!res.ok)
-    {
+    if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new PbhhHttpError(`HTTP ${res.status} ${res.statusText}: ${text}`, res.status, res.statusText, text);
     }

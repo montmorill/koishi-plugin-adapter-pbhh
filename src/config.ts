@@ -1,13 +1,11 @@
 import { Schema } from 'koishi';
 export type GravatarMirror = 'cravatar' | 'loli';
-export interface NotificationPrefs
-{
+export interface NotificationPrefs {
   like: boolean;
   reply: boolean;
   post: boolean;
 }
-export interface Config
-{
+export interface Config {
   baseUrl: string;
   username: string;
   password: string;
