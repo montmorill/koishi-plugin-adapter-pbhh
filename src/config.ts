@@ -4,6 +4,7 @@ export interface NotificationPrefs {
   like: boolean;
   reply: boolean;
   post: boolean;
+  mail: boolean;
 }
 export interface Config {
   baseUrl: string;
@@ -50,6 +51,7 @@ export const Config: Schema<Config> = Schema.intersect([
       like: Schema.boolean().default(true).description('点赞通知'),
       reply: Schema.boolean().default(true).description('回复通知'),
       post: Schema.boolean().default(true).description('关注的人发帖通知'),
+      mail: Schema.boolean().default(true).description('邮件通知'),
     }),
   }).description('订阅设置'),
   Schema.object({

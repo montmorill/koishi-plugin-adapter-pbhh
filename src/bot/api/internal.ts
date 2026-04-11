@@ -130,11 +130,10 @@ export class PbhhInternal {
       body: JSON.stringify(payload),
     });
   }
-  async setNotificationPrefs(token: string, prefs: { like: boolean; reply: boolean; post: boolean; }): Promise<{ like: boolean; reply: boolean; post: boolean; }> {
+  async setNotificationPrefs(token: string, _prefs: { like: boolean; reply: boolean; post: boolean; mail: boolean; }): Promise<{ like: boolean; reply: boolean; post: boolean; mail: boolean; }> {
     return this.http.fetchJson('/api/me/notification-prefs', {
-      method: 'PATCH',
+      method: 'GET',
       headers: authHeaders(token),
-      body: JSON.stringify(prefs),
     });
   }
   async getUser(token: string, username: string): Promise<UserResponse> {
