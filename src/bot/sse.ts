@@ -1,5 +1,6 @@
 import { PbhhBot } from './base';
-import { Context, Universal } from 'koishi';
+import { Universal } from 'koishi';
+import type { ReadableStreamDefaultReader } from 'node:stream/web';
 import type { Message } from '@satorijs/protocol';
 import { getPostDisplayName } from '../utils/post';
 
@@ -13,6 +14,7 @@ export class PbhhBotWithSse extends PbhhBot {
   private abortController: AbortController | null = null;
   private running = false;
   private disposeReconnect: (() => void) | null = null;
+  private sseReader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   private reconnectDelay = 2000;
 
   startSse() {
@@ -31,6 +33,10 @@ export class PbhhBotWithSse extends PbhhBot {
       this.abortController.abort();
       this.abortController = null;
     }
+    if (this.sseReader) {
+      void this.sseReader.cancel().catch(() => undefined);
+      this.sseReader = null;
+    }
     if (this.disposeReconnect) {
       this.disposeReconnect();
       this.disposeReconnect = null;
@@ -38,12 +44,10 @@ export class PbhhBotWithSse extends PbhhBot {
   }
 
   private async loop() {
-    const ctx = this.ctx as unknown as Context;
     while (this.running) {
       this.abortController = new AbortController();
       try {
-        const url = `${this.config.baseUrl}/api/events/sse`;
-        const res = await fetch(url, {
+        const res = await this.http.fetchRaw('/api/events/sse', {
           method: 'GET',
           headers: {
             accept: 'text/event-stream',
@@ -58,6 +62,7 @@ export class PbhhBotWithSse extends PbhhBot {
         }
         this.roomManager.restoreRooms(this.token);
         const reader = res.body.getReader();
+        this.sseReader = reader;
         const decoder = new TextDecoder('utf-8');
         let buffer = '';
         while (this.running) {
@@ -90,10 +95,14 @@ export class PbhhBotWithSse extends PbhhBot {
         if (this.abortController?.signal.aborted) return;
         this.log.warn('SSE 异常，准备重连：%o', err);
       } finally {
+        if (this.sseReader) {
+          await this.sseReader.cancel().catch(() => undefined);
+          this.sseReader = null;
+        }
         this.abortController = null;
       }
       await new Promise<void>((resolve) => {
-        this.disposeReconnect = ctx.setTimeout(() => {
+        this.disposeReconnect = this.ctx.setTimeout(() => {
           this.disposeReconnect = null;
           resolve();
         }, this.reconnectDelay);
