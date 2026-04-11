@@ -1,11 +1,6 @@
 import { Schema } from 'koishi';
 export type GravatarMirror = 'cravatar' | 'loli';
-export interface NotificationPrefs {
-  like: boolean;
-  reply: boolean;
-  post: boolean;
-  mail: boolean;
-}
+export type NotificationKind = 'like' | 'reply' | 'post' | 'mail';
 export interface Config {
   baseUrl: string;
   username: string;
@@ -14,7 +9,7 @@ export interface Config {
   requestTimeout: number;
   useProxy: boolean;
   proxyUrl?: string;
-  notificationPrefs: NotificationPrefs;
+  notificationKinds: NotificationKind[];
   userAgent: string;
   replyOnlyToBot: boolean;
   autoJoinRoom: string | null;
@@ -47,12 +42,16 @@ export const Config: Schema<Config> = Schema.intersect([
     }),
   ]),
   Schema.object({
-    notificationPrefs: Schema.object({
-      like: Schema.boolean().default(true).description('点赞通知'),
-      reply: Schema.boolean().default(true).description('回复通知'),
-      post: Schema.boolean().default(true).description('关注的人发帖通知'),
-      mail: Schema.boolean().default(true).description('邮件通知'),
-    }),
+    notificationKinds: Schema
+      .array(Schema.union([
+        Schema.const('like' as const).description('点赞通知'),
+        Schema.const('reply' as const).description('回复通知'),
+        Schema.const('post' as const).description('关注的人发帖通知'),
+        Schema.const('mail' as const).description('邮件通知'),
+      ]))
+      .default(['like', 'reply', 'post', 'mail'])
+      .role('checkbox')
+      .description('需要关注的订阅类型'),
   }).description('订阅设置'),
   Schema.object({
     replyOnlyToBot: Schema.boolean().default(true).description('仅处理回复机器人帖子的消息<br>关闭后，所有帖子的回复均触发 session'),

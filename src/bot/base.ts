@@ -62,7 +62,7 @@ export class PbhhBot extends Bot<Context, Config> {
       this.startSse();
     }
     try {
-      await this.internal.setNotificationPrefs(token, this.config.notificationPrefs);
+      await this.internal.setNotificationPrefs(token, this.config.notificationKinds);
     } catch (err) {
       this.log.warn('同步订阅设置失败（已忽略）：%o', err);
     }
